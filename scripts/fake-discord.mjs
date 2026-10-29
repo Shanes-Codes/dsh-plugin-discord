@@ -28,10 +28,10 @@ const CHANNEL = 'e2e-channel-1'
 const SCRIPT = process.argv.slice(2).length > 0
   ? process.argv.slice(2)
   : [
-      '用一句话回答:1+1等于几?',
+      'Answer in one sentence: what is 1+1?',
       '/current',
-      '/new e2e验证',
-      '刚才我问过你什么问题?',
+      '/new e2e check',
+      'What did I just ask you?',
       '/sessions',
     ]
 

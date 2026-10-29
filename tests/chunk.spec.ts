@@ -8,16 +8,16 @@ describe('chunkReply', () => {
   })
 
   it('keeps a short reply as one chunk', () => {
-    expect(chunkReply('短回复')).toEqual(['短回复'])
+    expect(chunkReply('short reply')).toEqual(['short reply'])
   })
 
   it('splits long text and every chunk fits the Discord limit', () => {
-    const text = Array.from({ length: 300 }, (_, index) => `第 ${String(index)} 段内容,足够长的一行文字。`).join('\n\n')
+    const text = Array.from({ length: 300 }, (_, index) => `paragraph ${String(index)} with enough text to be long.`).join('\n\n')
     const chunks = chunkReply(text, 10)
     expect(chunks.length).toBeGreaterThan(1)
     for (const chunk of chunks) expect(chunk.length).toBeLessThanOrEqual(DISCORD_MESSAGE_LIMIT)
     // No content lost when under the chunk cap.
-    expect(chunks.join('\n').replaceAll(/\s+/g, '')).toContain('第299段')
+    expect(chunks.join('\n').replaceAll(/\s+/g, '')).toContain('paragraph299')
   })
 
   it('prefers paragraph boundaries', () => {
@@ -30,7 +30,7 @@ describe('chunkReply', () => {
 
   it('re-opens a code fence split across chunks', () => {
     const code = Array.from({ length: 200 }, (_, index) => `const line${String(index)} = ${String(index)}`).join('\n')
-    const text = `说明文字\n\`\`\`ts\n${code}\n\`\`\`\n结尾`
+    const text = `intro text\n\`\`\`ts\n${code}\n\`\`\`\nthe end`
     const chunks = chunkReply(text, 10)
     expect(chunks.length).toBeGreaterThan(1)
     for (const [index, chunk] of chunks.entries()) {
@@ -45,6 +45,6 @@ describe('chunkReply', () => {
     const text = Array.from({ length: 500 }, () => 'y'.repeat(100)).join('\n')
     const chunks = chunkReply(text, 2)
     expect(chunks.length).toBe(2)
-    expect(chunks[1]).toContain('截断')
+    expect(chunks[1]).toContain('truncated')
   })
 })

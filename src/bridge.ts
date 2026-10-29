@@ -465,7 +465,7 @@ export class SessionBridge {
     for (const attachment of attachments.slice(0, 5)) {
       try {
         if (attachment.size > this.config.maxIncomingBytes) {
-          notes.push(`[Discord 附件 ${attachment.filename} 超过 ${String(Math.floor(this.config.maxIncomingBytes / 1_000_000))}MB,未保存]`)
+          notes.push(`[Discord attachment ${attachment.filename} exceeded ${String(Math.floor(this.config.maxIncomingBytes / 1_000_000))}MB and was not saved]`)
           continue
         }
         const response = await fetch(attachment.url)
@@ -474,10 +474,10 @@ export class SessionBridge {
         await mkdir(directory, { recursive: true })
         const target = join(directory, `${messageId}-${sanitizeFilename(attachment.filename)}`)
         await writeFile(target, data)
-        notes.push(`[用户通过 Discord 发来文件,已保存: ${target}${attachment.content_type === undefined ? '' : ` (${attachment.content_type})`}]`)
+        notes.push(`[User sent a file over Discord, saved to: ${target}${attachment.content_type === undefined ? '' : ` (${attachment.content_type})`}]`)
       } catch (error) {
         this.log('warn', `incoming attachment failed: ${String(error)}`)
-        notes.push(`[Discord 附件 ${attachment.filename} 保存失败]`)
+        notes.push(`[Discord attachment ${attachment.filename} could not be saved]`)
       }
     }
     return notes
@@ -502,21 +502,21 @@ export class SessionBridge {
       try {
         const resolved = await realpath(path)
         if (!roots.some(root => isPathUnder(resolved, root))) {
-          problems.push(`⚠️ 未发送 ${path}:不在允许目录内(会话工作目录${this.config.uploadRoots.length > 0 ? ' + uploadRoots' : ''})。`)
+          problems.push(`⚠️ Not sent ${path}: outside the allowed directories (session working directory${this.config.uploadRoots.length > 0 ? ' + uploadRoots' : ''}).`)
           continue
         }
         const info = await stat(resolved)
         if (!info.isFile()) {
-          problems.push(`⚠️ 未发送 ${path}:不是普通文件。`)
+          problems.push(`⚠️ Not sent ${path}: not a regular file.`)
           continue
         }
         if (info.size > this.config.maxUploadBytes) {
-          problems.push(`⚠️ 未发送 ${path}:${String(Math.ceil(info.size / 1_000_000))}MB 超过上限 ${String(Math.floor(this.config.maxUploadBytes / 1_000_000))}MB。`)
+          problems.push(`⚠️ Not sent ${path}: ${String(Math.ceil(info.size / 1_000_000))}MB exceeds the ${String(Math.floor(this.config.maxUploadBytes / 1_000_000))}MB cap.`)
           continue
         }
         files.push({ filename: basename(resolved), data: new Uint8Array(await readFile(resolved)) })
       } catch (error) {
-        problems.push(`⚠️ 未发送 ${path}:${error instanceof Error ? error.message : String(error)}`)
+        problems.push(`⚠️ Not sent ${path}: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
     return { files, problems }
@@ -533,7 +533,7 @@ export class SessionBridge {
     try {
       const { agent, created, title } = await this.ensureChannelAgent(channelId)
       const preamble = created && title !== undefined
-        ? [`(已自动新建会话 **${title}** · \`${agent.id}\`)`]
+        ? [`(auto-created session **${title}** · \`${agent.id}\`)`]
         : []
       this.injectNoticeOnce(agent)
       const agentCwd = agent.session.header.cwd ?? this.config.cwd
@@ -560,7 +560,7 @@ export class SessionBridge {
       if (events === undefined) throw new Error('this host exposes no session event log (neither snapshotEvents() nor events)')
       const promptSeq = findPromptSeq(events, messageId)
       if (promptSeq === undefined) {
-        return { chunks: [...preamble, '⚠️ 消息没有进入会话(可能被取消),请重试。'], files: [] }
+        return { chunks: [...preamble, '⚠️ The message never reached the session (it may have been cancelled). Please try again.'], files: [] }
       }
       const reply = extractReply(events, promptSeq)
       if (reply.reasonKind === 'completed' || (reply.reasonKind === undefined && reply.text !== '')) {
@@ -568,16 +568,16 @@ export class SessionBridge {
         const uploads = await this.collectUploads(agentCwd, paths)
         const chunks = chunkReply(cleaned, this.config.maxChunksPerReply)
         const body = chunks.length === 0 && uploads.files.length === 0
-          ? [...preamble, '(本回合没有文本回复)']
+          ? [...preamble, '(no text reply this turn)']
           : [...preamble, ...chunks, ...uploads.problems]
         return { chunks: body, files: uploads.files }
       }
-      if (reply.reasonKind === 'cancelled') return { chunks: [...preamble, '⏹️ 回合被取消。'], files: [] }
+      if (reply.reasonKind === 'cancelled') return { chunks: [...preamble, '⏹️ Turn cancelled.'], files: [] }
       const detail = reply.errorMessage ?? reply.reasonKind ?? 'unknown'
-      return { chunks: [...preamble, `⚠️ 回合失败: ${detail}`], files: [] }
+      return { chunks: [...preamble, `⚠️ Turn failed: ${detail}`], files: [] }
     } catch (error) {
       this.log('warn', `prompt failed: ${String(error)}`)
-      return { chunks: [`⚠️ 出错了: ${error instanceof Error ? error.message : String(error)}`], files: [] }
+      return { chunks: [`⚠️ Something went wrong: ${error instanceof Error ? error.message : String(error)}`], files: [] }
     } finally {
       stopTyping()
     }
@@ -586,15 +586,15 @@ export class SessionBridge {
   private async commandNew(channelId: string, label: string): Promise<string[]> {
     try {
       const { agent, title } = await this.createSession(channelId, label)
-      return [`✅ 已新建会话 **${title}**\nid: \`${agent.id}\`\n这个会话和 web 界面完全共享,直接发消息即可对话。`]
+      return [`✅ Created session **${title}**\nid: \`${agent.id}\`\nThis session is shared with the web UI in full — just send a message to keep talking here.`]
     } catch (error) {
-      return [`⚠️ 新建会话失败: ${error instanceof Error ? error.message : String(error)}`]
+      return [`⚠️ Could not create a session: ${error instanceof Error ? error.message : String(error)}`]
     }
   }
 
   private async commandSessions(channelId: string): Promise<string[]> {
     const persistence = this.ctx.get('sessionPersistence')
-    if (persistence === undefined) return ['⚠️ 会话持久化服务不可用。']
+    if (persistence === undefined) return ['⚠️ Session persistence is unavailable.']
     const bound = this.store.get(channelId)
     // dsh >= 0.1.5 wraps each row in a storage snapshot (`{ header, revision }`);
     // earlier hosts listed the header itself. Accept either.
@@ -612,35 +612,35 @@ export class SessionBridge {
       const stamp = `${pad(created.getMonth() + 1)}-${pad(created.getDate())} ${pad(created.getHours())}:${pad(created.getMinutes())}`
       return `${marker}\`${header.id}\` · ${stamp}`
     })
-    if (lines.length === 0) return ['还没有 Discord 桥接过的会话。发 `/new` 或直接发消息开始。']
-    return [[`**Discord 桥接过的会话**(👉 = 本频道当前绑定)`, ...lines, '用 `/use <id>` 切换;web 上任意会话的 id 也可以。'].join('\n')]
+    if (lines.length === 0) return ['No Discord sessions yet. Send `/new` or just send a message to start one.']
+    return [[`**Discord-bridged sessions** (👉 = bound to this channel)`, ...lines, 'Switch with `/use <id>`; any session id from the web UI works too.'].join('\n')]
   }
 
   private async commandUse(channelId: string, rawId: string): Promise<string[]> {
-    if (rawId === '') return ['用法: `/use <会话id>`']
+    if (rawId === '') return ['Usage: `/use <session id>`']
     try {
       const agent = await this.acquire(rawId)
       this.store.set(channelId, agent.id)
-      return [`✅ 本频道已绑定会话 \`${agent.id}\`,直接发消息继续对话。`]
+      return [`✅ This channel is now bound to session \`${agent.id}\` — send a message to keep the conversation going.`]
     } catch (error) {
-      return [`⚠️ 绑定失败: ${error instanceof Error ? error.message : String(error)}`]
+      return [`⚠️ Could not bind the session: ${error instanceof Error ? error.message : String(error)}`]
     }
   }
 
   private async commandCurrent(channelId: string): Promise<string[]> {
     const bound = this.store.get(channelId)
-    if (bound === undefined) return ['本频道还没有绑定会话;发消息会自动新建,或用 `/new`、`/use <id>`。']
+    if (bound === undefined) return ['This channel has no session bound yet; sending a message creates one automatically, or use `/new` or `/use <id>`.']
     const live = this.ctx.agents.get(this.sessionId(bound))
-    const status = live === undefined ? '未加载(冷会话)' : live.status
-    return [`当前会话: \`${bound}\`\n状态: ${String(status)}`]
+    const status = live === undefined ? 'not loaded (cold session)' : live.status
+    return [`Current session: \`${bound}\`\nStatus: ${String(status)}`]
   }
 
   private commandStop(channelId: string): string[] {
     const bound = this.store.get(channelId)
-    if (bound === undefined) return ['本频道还没有绑定会话。']
+    if (bound === undefined) return ['This channel has no session bound yet.']
     const live = this.ctx.agents.get(this.sessionId(bound))
-    if (live === undefined) return ['会话未在运行,无需取消。']
+    if (live === undefined) return ['The session is not running, so there is nothing to cancel.']
     live.cancel({ kind: 'user' })
-    return ['⏹️ 已请求取消当前回合。']
+    return ['⏹️ Asked the current turn to stop.']
   }
 }

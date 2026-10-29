@@ -45,15 +45,15 @@ interface Job {
  */
 export function imessageNotice(uploadRoots: readonly string[] = []): string {
   const roots = uploadRoots.length === 0
-    ? '仅限会话工作目录内的文件'
-    : `仅限会话工作目录及这些目录内的文件: ${uploadRoots.join('、')}`
+    ? 'Only files inside the session working directory'
+    : `Only files inside the session working directory and these directories: ${uploadRoots.join(', ')}`
   return [
     '<system-reminder>',
-    '本会话正通过 iMessage 桥接与用户对话;用户此刻在 iPhone 的「信息」App 上。你和用户共用同一个 Apple ID 和这台 Mac。',
-    '- iMessage 不渲染 Markdown:用纯文本、短段落,别用表格、# 标题和 ** 加粗。',
-    `- 发送文件/图片给用户:在回复中单独一行写 [discord-file: /绝对路径](标记名沿用 Discord 桥接),桥接会把该文件作为 iMessage 附件发出并移除这一行。${roots}。`,
-    '- 不要自己用 osascript 或「信息」App 发消息;回复由桥接负责发回。',
-    '- 以用户身份对外发消息、付款、删除数据等不可逆的事,先在回复里说清楚并等用户确认。',
+    'This session is talking to the user through the iMessage bridge; the user is in the Messages app on their iPhone. You and the user share the same Apple ID and this Mac.',
+    '- iMessage does not render markdown: use plain text and short paragraphs, no tables, # headings or ** bold.',
+    `- To send a file or image to the user: write [discord-file: /absolute/path] (the marker name is kept from the Discord bridge), and the bridge uploads that file as an iMessage attachment and strips the line. ${roots}.`,
+    '- Do not message anyone yourself with osascript or the Messages app; the bridge sends every reply back.',
+    '- For irreversible actions taken as the user (sending messages, payments, deleting data), say what you will do in the reply and wait for confirmation.',
     '</system-reminder>',
   ].join('\n')
 }
@@ -108,7 +108,7 @@ export function createImessageHandler(
       job.files = files
     } catch (error) {
       log('warn', `imessage job ${id} failed: ${String(error)}`)
-      job.chunks = [`⚠️ 出错了: ${error instanceof Error ? error.message : String(error)}`]
+      job.chunks = [`⚠️ Something went wrong: ${error instanceof Error ? error.message : String(error)}`]
     } finally {
       job.done = true
       job.finishedAt = Date.now()

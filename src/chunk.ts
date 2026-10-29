@@ -60,7 +60,7 @@ export function chunkReply(text: string, maxChunks = 6): string[] {
   }
   if (rest !== '') {
     const last = chunks[chunks.length - 1]
-    const notice = '\n\n…(回复过长已截断,完整内容请在 web 界面查看)'
+    const notice = '\n\n…(reply was too long and got truncated — read the rest in the web UI)'
     if (last !== undefined && last.length + notice.length <= DISCORD_MESSAGE_LIMIT) {
       chunks[chunks.length - 1] = last + notice
     }

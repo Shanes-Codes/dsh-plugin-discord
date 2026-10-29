@@ -4,11 +4,11 @@ import type { QuestionItem } from '../src/questions.ts'
 
 const sample: QuestionItem = {
   id: 'confirm-time',
-  header: '确认时间',
-  question: '现在是晚上 22:23,「11:40」指哪个?',
+  header: 'Confirm the time',
+  question: 'It is 22:23 now — which "11:40" do you mean?',
   options: [
-    { label: '今晚 23:40', description: '约 1 小时后(今晚)' },
-    { label: '明天上午 11:40', description: '明天上午' },
+    { label: 'Tonight 23:40', description: 'about 1 hour from now (tonight)' },
+    { label: 'Tomorrow 11:40', description: 'tomorrow morning' },
   ],
 }
 
@@ -16,18 +16,18 @@ describe('formatQuestionContent', () => {
   it('renders header, question, and counter for multi-question asks', () => {
     const content = formatQuestionContent(sample, 1, 3)
     expect(content).toContain('(2/3)')
-    expect(content).toContain('**确认时间**')
+    expect(content).toContain('**Confirm the time**')
     expect(content).toContain('11:40')
   })
 
   it('quotes the detail block and stays under the message limit', () => {
-    const content = formatQuestionContent({ ...sample, detail: '第一行\n第二行'.repeat(400) }, 0, 1)
-    expect(content).toContain('> 第一行')
+    const content = formatQuestionContent({ ...sample, detail: 'line one\nline two'.repeat(400) }, 0, 1)
+    expect(content).toContain('> line one')
     expect(content.length).toBeLessThanOrEqual(1900)
   })
 
   it('hints at the custom-answer button when there are no options', () => {
-    expect(formatQuestionContent({ id: 'q', question: '说说看?' }, 0, 1)).toContain('点击下面的按钮')
+    expect(formatQuestionContent({ id: 'q', question: 'Tell me what you think?' }, 0, 1)).toContain('Click the button below')
   })
 })
 
@@ -47,14 +47,14 @@ describe('buildComponents', () => {
   })
 
   it('widens max_values for multi-select and caps options at 25', () => {
-    const many = { ...sample, multiSelect: true, options: Array.from({ length: 30 }, (_, i) => ({ label: `选项${String(i)}` })) }
+    const many = { ...sample, multiSelect: true, options: Array.from({ length: 30 }, (_, i) => ({ label: `option${String(i)}` })) }
     const rows = buildComponents('rpc-1', 2, many) as { components: { options?: unknown[]; max_values?: number }[] }[]
     expect(rows[0]?.components[0]?.options).toHaveLength(25)
     expect(rows[0]?.components[0]?.max_values).toBe(25)
   })
 
   it('emits only buttons when the question has no options', () => {
-    const rows = buildComponents('rpc-1', 0, { id: 'q', question: '自由回答' })
+    const rows = buildComponents('rpc-1', 0, { id: 'q', question: 'free-form answer' })
     expect(rows).toHaveLength(1)
   })
 })
@@ -99,10 +99,10 @@ describe('QuestionRelay.handleAsk (waterfall seat)', () => {
     const relay = relayFor(undefined, posted)
     const answer = await relay.handleAsk(
       { questions: [sample], agent: { id: 'session-x' } },
-      async () => ({ answers: [{ id: 'confirm-time', selected: ['今晚 23:40'] }] }),
+      async () => ({ answers: [{ id: 'confirm-time', selected: ['Tonight 23:40'] }] }),
     )
     expect(posted).toHaveLength(0)
-    expect(answer.answers[0]?.selected).toEqual(['今晚 23:40'])
+    expect(answer.answers[0]?.selected).toEqual(['Tonight 23:40'])
   })
 
   it('posts a card for a bound session and settles from a Discord click', async () => {
@@ -123,7 +123,7 @@ describe('QuestionRelay.handleAsk (waterfall seat)', () => {
       data: { custom_id: customId, values: ['1'] },
     } as never)
     const answer = await pending
-    expect(answer.answers).toEqual([{ id: 'confirm-time', selected: ['明天上午 11:40'] }])
+    expect(answer.answers).toEqual([{ id: 'confirm-time', selected: ['Tomorrow 11:40'] }])
   })
 
   it('lets a web answer win and closes the Discord card', async () => {
@@ -132,10 +132,10 @@ describe('QuestionRelay.handleAsk (waterfall seat)', () => {
     const relay = relayFor('chan-1', posted, edits as unknown[])
     const answer = await relay.handleAsk(
       { questions: [sample], agent: { id: 'session-x' } },
-      async () => ({ answers: [{ id: 'confirm-time', selected: ['今晚 23:40'] }] }),
+      async () => ({ answers: [{ id: 'confirm-time', selected: ['Tonight 23:40'] }] }),
     )
-    expect(answer.answers[0]?.selected).toEqual(['今晚 23:40'])
-    expect(edits[0]?.content).toContain('已回答')
+    expect(answer.answers[0]?.selected).toEqual(['Tonight 23:40'])
+    expect(edits[0]?.content).toContain('Answered')
   })
 
   it('falls back to delegation when the card cannot be posted', async () => {
@@ -146,9 +146,9 @@ describe('QuestionRelay.handleAsk (waterfall seat)', () => {
     })
     const answer = await relay.handleAsk(
       { questions: [sample], agent: { id: 'session-x' } },
-      async () => ({ answers: [{ id: 'confirm-time', selected: ['今晚 23:40'] }] }),
+      async () => ({ answers: [{ id: 'confirm-time', selected: ['Tonight 23:40'] }] }),
     )
-    expect(answer.answers[0]?.selected).toEqual(['今晚 23:40'])
+    expect(answer.answers[0]?.selected).toEqual(['Tonight 23:40'])
   })
 
   it('rejects the ask when the user cancels from Discord', async () => {

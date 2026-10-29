@@ -13,7 +13,7 @@
  *
  * Every request must carry `Authorization: Bearer <secret>`. Each dsh
  * deployment serves its own bot, so sender identity follows the deployment
- * (dsh 本地 → its bot, dsh 服务端 → its bot) with zero extra wiring.
+ * (a local dsh → its bot, a hosted dsh → its bot) with zero extra wiring.
  *
  * @module dsh-plugin-discord/notify
  */
@@ -88,10 +88,10 @@ function mcpTool(httpEndpoint: string, secretPath: string): Record<string, unkno
     description: 'Send a proactive Discord message from this dsh deployment\'s bot, IMMEDIATELY. '
       + 'Defaults to a DM to the deployment owner; pass userId for another allowlisted user\'s DM, '
       + 'or channelId for a guild channel the bot can post in. Use for alerts and task-completion notices. '
-      + 'For a SCHEDULED or delayed reminder (提醒/闹钟/定时通知), do NOT call this tool now — instead create a timed job '
+      + 'For a SCHEDULED or delayed reminder (a reminder, alarm or timed notification), do NOT call this tool now — instead create a timed job '
       + '(sleep-in-background / at / cron / launchd) whose command sends the same notification over plain HTTP: '
       + `curl -X POST ${httpEndpoint} -H "authorization: Bearer ${secretExpr}" `
-      + '-H "content-type: application/json" -d \'{"content": "提醒内容"}\'. '
+      + '-H "content-type: application/json" -d \'{"content": "your reminder text"}\'. '
       + 'That endpoint is this same capability, callable without MCP, so it works from any scheduled job.',
     inputSchema: {
       type: 'object',

@@ -57,17 +57,17 @@ export function sanitizeFilename(name: string): string {
 export function capabilityNotice(maxUploadBytes: number, uploadRoots: readonly string[] = []): string {
   const megabytes = Math.floor(maxUploadBytes / 1_000_000)
   const roots = uploadRoots.length === 0
-    ? '仅限会话工作目录内的文件'
-    : `仅限会话工作目录及这些目录内的文件: ${uploadRoots.join('、')}`
+    ? 'Only files inside the session working directory'
+    : `Only files inside the session working directory and these directories: ${uploadRoots.join(', ')}`
   return [
     '<system-reminder>',
-    '本会话正通过 Discord 桥接(dsh-plugin-discord)与用户对话;用户此刻在 Discord 客户端上。',
-    `- 发送文件/图片给用户:在回复中单独一行写 [discord-file: /绝对路径],桥接会把该文件作为 Discord 附件上传,并把这行从文本中移除。${roots},单个不超过 ${String(megabytes)}MB;图片会在 Discord 内联显示。`,
-    '- 调用会产出文件的工具/skill 时(生成图片、导出文档等),优先把它的输出目录参数(如 -o/--output)指向会话工作目录,这样产物天然可发送。',
-    '- 若产物已经落在允许目录之外(工具默认写 ~/Downloads 之类),先把它复制进会话工作目录,再对复制后的路径写标记——否则会被安全围栏拒绝。',
-    '- 用户在 Discord 发的文件/图片会自动保存到工作目录的 .discord-uploads/ 里,消息里会附上路径,直接读取即可。',
-    '- 文本回复按 2000 字符分片发送,过长会被截断;保持精炼。',
-    '- 不要寻找或使用主机上其它 Discord 工具/凭据来发消息;所有 Discord 通信都由桥接负责。',
+    'This session is talking to the user through the Discord bridge (dsh-plugin-discord); the user is on Discord right now.',
+    `- To send a file or image to the user: write [discord-file: /absolute/path], and the bridge uploads that file as a Discord attachment and strips the line from the text. ${roots}, max ${String(megabytes)}MB; images show inline in Discord.`,
+    '- When calling a tool or skill that produces files (image generation, document export), point its output-directory option (such as -o/--output) at the session working directory, so the artifact is sendable by construction.',
+    '- If an artifact already landed outside the allowed directories (tools often default to ~/Downloads), copy it into the session working directory first, then write the marker for the copied path — otherwise the safety fence rejects it.',
+    '- Files and images the user sends in Discord are saved automatically under .discord-uploads/, and the message carries the path, so just read it.',
+    '- Discord renders markdown, but replies are capped at 2000 characters and anything longer is truncated, so stay concise.',
+    '- Do not look for or use other Discord tooling or credentials on the host to send messages; this bridge owns all Discord traffic.',
     '</system-reminder>',
   ].join('\n')
 }

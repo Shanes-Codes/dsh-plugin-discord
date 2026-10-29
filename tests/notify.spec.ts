@@ -28,8 +28,8 @@ describe('DiscordNotifier', () => {
   it('opens the owner DM once and caches the channel', async () => {
     const { rest, calls } = fakeRest()
     const notifier = new DiscordNotifier(rest as DiscordRest, 'owner-1', 6)
-    await notifier.send({}, '第一条')
-    await notifier.send({}, '第二条')
+    await notifier.send({}, 'first message')
+    await notifier.send({}, 'second message')
     expect(calls.filter(call => call.startsWith('dm:'))).toEqual(['dm:owner-1'])
     expect(calls.filter(call => call.startsWith('msg:'))).toHaveLength(2)
   })
@@ -37,7 +37,7 @@ describe('DiscordNotifier', () => {
   it('targets an explicit channel without a DM lookup', async () => {
     const { rest, calls } = fakeRest()
     const notifier = new DiscordNotifier(rest as DiscordRest, 'owner-1', 6)
-    const sent = await notifier.send({ channelId: 'chan-9' }, '进频道')
+    const sent = await notifier.send({ channelId: 'chan-9' }, 'to the channel')
     expect(sent.channelId).toBe('chan-9')
     expect(calls.some(call => call.startsWith('dm:'))).toBe(false)
   })
@@ -93,7 +93,7 @@ describe('handleMcpMessage', () => {
   it('calls the tool and reports the delivery', async () => {
     const sent: unknown[] = []
     const response = await handleMcpMessage(
-      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'discord_notify', arguments: { content: '警报' } } },
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'discord_notify', arguments: { content: 'alert' } } },
       deps(async (target, content) => { sent.push([target, content]); return { channelId: 'dm-1', messageIds: ['m1'] } }),
     ) as { result: { content: { text: string }[]; isError?: boolean } }
     expect(sent).toHaveLength(1)
@@ -157,13 +157,13 @@ describe('createNotifyHandler over HTTP', () => {
     const response = await fetch(`${origin}/plugins/discord/api/notify`, {
       method: 'POST',
       headers: { 'authorization': 'Bearer secret-1', 'content-type': 'application/json' },
-      body: JSON.stringify({ content: '构建完成 ✅' }),
+      body: JSON.stringify({ content: 'build finished ✅' }),
     })
     expect(response.status).toBe(200)
     const body = await response.json() as { ok: boolean; channelId: string }
     expect(body.ok).toBe(true)
     expect(body.channelId).toBe('dm-1')
-    expect(sent[0]?.content).toBe('构建完成 ✅')
+    expect(sent[0]?.content).toBe('build finished ✅')
   })
 
   it('serves the MCP handshake and tool call', async () => {
@@ -176,10 +176,10 @@ describe('createNotifyHandler over HTTP', () => {
     expect(initialize.status).toBe(200)
     const initialized = await post({ jsonrpc: '2.0', method: 'notifications/initialized' })
     expect(initialized.status).toBe(202)
-    const call = await post({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'discord_notify', arguments: { content: '磁盘 90%' } } })
+    const call = await post({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'discord_notify', arguments: { content: 'disk at 90%' } } })
     const body = await call.json() as { result: { content: { text: string }[] } }
     expect(body.result.content[0]?.text).toContain('dm-1')
-    expect(sent.map(entry => entry.content)).toEqual(['磁盘 90%'])
+    expect(sent.map(entry => entry.content)).toEqual(['disk at 90%'])
   })
 
   it('404s unknown paths and 405s GET on the MCP endpoint', async () => {

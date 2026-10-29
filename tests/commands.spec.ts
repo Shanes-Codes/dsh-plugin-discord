@@ -3,7 +3,7 @@ import { APPLICATION_COMMANDS, commandFromInteraction, parseCommand } from '../s
 
 describe('parseCommand', () => {
   it('treats plain text as a prompt', () => {
-    expect(parseCommand('你好,帮我看看这个函数')).toEqual({ kind: 'prompt', text: '你好,帮我看看这个函数' })
+    expect(parseCommand('hi, take a look at this function')).toEqual({ kind: 'prompt', text: 'hi, take a look at this function' })
   })
 
   it('parses /new without a label', () => {
@@ -11,7 +11,7 @@ describe('parseCommand', () => {
   })
 
   it('parses /new with a label', () => {
-    expect(parseCommand('/new 重构计划')).toEqual({ kind: 'new', label: '重构计划' })
+    expect(parseCommand('/new refactor plan')).toEqual({ kind: 'new', label: 'refactor plan' })
   })
 
   it('is case-insensitive on the command word', () => {
@@ -37,7 +37,7 @@ describe('parseCommand', () => {
 
   it('passes unknown slash text through as a prompt', () => {
     expect(parseCommand('/compact')).toEqual({ kind: 'prompt', text: '/compact' })
-    expect(parseCommand('/etc/hosts 是什么')).toEqual({ kind: 'prompt', text: '/etc/hosts 是什么' })
+    expect(parseCommand('/etc/hosts what is this')).toEqual({ kind: 'prompt', text: '/etc/hosts what is this' })
   })
 
   it('answers help for empty content', () => {
@@ -52,7 +52,7 @@ describe('parseCommand', () => {
 describe('commandFromInteraction', () => {
   it('maps /new with and without a title option', () => {
     expect(commandFromInteraction('new', [])).toEqual({ kind: 'new', label: '' })
-    expect(commandFromInteraction('new', [{ name: 'title', value: ' 计划 ' }])).toEqual({ kind: 'new', label: '计划' })
+    expect(commandFromInteraction('new', [{ name: 'title', value: ' plan ' }])).toEqual({ kind: 'new', label: 'plan' })
   })
 
   it('maps /use with its session option', () => {

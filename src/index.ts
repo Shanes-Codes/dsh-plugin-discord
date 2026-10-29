@@ -363,7 +363,7 @@ export function apply(ctx: Context, config: Config): void {
             emptyContentWarned.add(message.channel_id)
             void rest.createMessage(
               message.channel_id,
-              '⚠️ 收到了空消息内容。如果你发的是文字,机器人缺少 MESSAGE_CONTENT intent(在 Discord developer portal 打开),或改用私聊。',
+              '⚠️ The message content came through empty. If you sent text, the bot is missing the MESSAGE_CONTENT intent (enable it in the Discord developer portal), or try a DM.',
             ).catch(() => { /* best effort */ })
           }
           return
@@ -390,7 +390,7 @@ export function apply(ctx: Context, config: Config): void {
               await rest.createMessageWithFiles(message.channel_id, '', reply.files)
             } catch (error) {
               logger.warn(`discord-bridge: file upload failed: ${String(error)}`)
-              await rest.createMessage(message.channel_id, '⚠️ 附件上传失败,文件仍在服务器上。').catch(() => { /* best effort */ })
+              await rest.createMessage(message.channel_id, '⚠️ The attachment failed to upload; the file is still on the server.').catch(() => { /* best effort */ })
             }
           }
         })().catch((error: unknown) => {
@@ -445,12 +445,12 @@ export function apply(ctx: Context, config: Config): void {
         if (commandName === undefined) return
         void (async () => {
           if (!isAllowed(admission, botUserId, config.allowedUsers, config.allowedChannels)) {
-            await rest.ackEphemeral(interaction.id, interaction.token, '未授权使用这个桥接。')
+            await rest.ackEphemeral(interaction.id, interaction.token, 'You are not authorized to use this bridge.')
             return
           }
           const command = commandFromInteraction(commandName, interaction.data?.options ?? [])
           if (command === undefined) {
-            await rest.ackEphemeral(interaction.id, interaction.token, `未知命令 /${commandName}`)
+            await rest.ackEphemeral(interaction.id, interaction.token, `Unknown command /${commandName}`)
             return
           }
           // Deferred ack buys 15 minutes and shows "thinking…" in the client.
@@ -459,7 +459,7 @@ export function apply(ctx: Context, config: Config): void {
           const appId = applicationId
           if (appId === undefined) return
           const [first, ...others] = reply.chunks
-          await rest.editOriginalResponse(appId, interaction.token, first ?? '(无输出)')
+          await rest.editOriginalResponse(appId, interaction.token, first ?? '(no output)')
           for (const chunk of others) await rest.followupResponse(appId, interaction.token, chunk)
         })().catch((error: unknown) => {
           logger.warn(`discord-bridge: interaction handling failed: ${String(error)}`)

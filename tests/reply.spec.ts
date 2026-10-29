@@ -42,40 +42,40 @@ describe('extractReply', () => {
     const events: LogEventLike[] = [
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
       userMessage(2, 'm1'),
-      assistant(3, '想一下'),
-      assistant(4, '最终答案'),
+      assistant(3, 'thinking it over'),
+      assistant(4, 'the final answer'),
       { seq: 5, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
     ]
     const reply = extractReply(events, 2)
-    expect(reply).toEqual({ text: '最终答案', reasonKind: 'completed', errorMessage: undefined })
+    expect(reply).toEqual({ text: 'the final answer', reasonKind: 'completed', errorMessage: undefined })
   })
 
   it('ignores an earlier concurrent turn that belongs to the web user', () => {
     const events: LogEventLike[] = [
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
       userMessage(2),
-      assistant(3, 'web 的答案'),
+      assistant(3, 'the web answer'),
       { seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
       { seq: 5, type: 'turn/start', data: { turn: 2 } },
       userMessage(6, 'm2'),
-      assistant(7, 'discord 的答案'),
+      assistant(7, 'the discord answer'),
       { seq: 8, type: 'turn/end', data: { turn: 2, reason: { kind: 'completed' } } },
     ]
     const reply = extractReply(events, 6)
-    expect(reply.text).toBe('discord 的答案')
+    expect(reply.text).toBe('the discord answer')
   })
 
   it('stops at the first turn end after the prompt', () => {
     const events: LogEventLike[] = [
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
       userMessage(2, 'm1'),
-      assistant(3, '第一轮'),
+      assistant(3, 'first turn'),
       { seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
       { seq: 5, type: 'turn/start', data: { turn: 2 } },
-      assistant(6, '之后别人的轮次'),
+      assistant(6, 'someone else\'s later turn'),
       { seq: 7, type: 'turn/end', data: { turn: 2, reason: { kind: 'completed' } } },
     ]
-    expect(extractReply(events, 2).text).toBe('第一轮')
+    expect(extractReply(events, 2).text).toBe('first turn')
   })
 
   it('carries the error out of a failed turn', () => {
@@ -93,10 +93,10 @@ describe('extractReply', () => {
     const events: LogEventLike[] = [
       { seq: 1, type: 'turn/start', data: { turn: 1 } },
       userMessage(2, 'm1'),
-      assistant(3, '进行中'),
+      assistant(3, 'still running'),
     ]
     const reply = extractReply(events, 2)
     expect(reply.reasonKind).toBeUndefined()
-    expect(reply.text).toBe('进行中')
+    expect(reply.text).toBe('still running')
   })
 })

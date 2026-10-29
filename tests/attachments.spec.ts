@@ -3,28 +3,28 @@ import { capabilityNotice, extractFileMarkers, isPathUnder, sanitizeFilename } f
 
 describe('extractFileMarkers', () => {
   it('leaves markerless text untouched', () => {
-    expect(extractFileMarkers('普通回复')).toEqual({ text: '普通回复', paths: [] })
+    expect(extractFileMarkers('plain reply')).toEqual({ text: 'plain reply', paths: [] })
   })
 
   it('extracts one marker and strips its line', () => {
-    const input = '文档写好了。\n\n[discord-file: /tmp/报告.md]\n\n还有别的说明。'
+    const input = 'The document is ready.\n\n[discord-file: /tmp/report.md]\n\nA few more notes as well.'
     const result = extractFileMarkers(input)
-    expect(result.paths).toEqual(['/tmp/报告.md'])
-    expect(result.text).toBe('文档写好了。\n\n还有别的说明。')
+    expect(result.paths).toEqual(['/tmp/report.md'])
+    expect(result.text).toBe('The document is ready.\n\nA few more notes as well.')
     expect(result.text).not.toContain('discord-file')
   })
 
   it('extracts several markers in order', () => {
-    const input = '[discord-file: /a/x.png]\n[discord-file: /b/y.pdf]\n完毕'
+    const input = '[discord-file: /a/x.png]\n[discord-file: /b/y.pdf]\nDone'
     const result = extractFileMarkers(input)
     expect(result.paths).toEqual(['/a/x.png', '/b/y.pdf'])
-    expect(result.text).toBe('完毕')
+    expect(result.text).toBe('Done')
   })
 
   it('tolerates surrounding whitespace, keeps inline mentions as text', () => {
-    const result = extractFileMarkers('  [discord-file:  /tmp/a.txt ]  \n提到 [discord-file: 但不在行首独立] 的写法不算')
+    const result = extractFileMarkers('  [discord-file:  /tmp/a.txt ]  \na mention like [discord-file: not alone on its own line] does not count')
     expect(result.paths).toEqual(['/tmp/a.txt'])
-    expect(result.text).toContain('不算')
+    expect(result.text).toContain('does not count')
   })
 })
 
@@ -63,9 +63,9 @@ describe('capabilityNotice', () => {
 
   it('teaches the containment rule, aiming tools at the cwd, and the copy-in fallback', () => {
     const bare = capabilityNotice(8_000_000)
-    expect(bare).toContain('仅限会话工作目录')
-    expect(bare).toContain('输出目录参数')
-    expect(bare).toContain('复制进会话工作目录')
+    expect(bare).toContain('Only files inside the session working directory')
+    expect(bare).toContain('output-directory option')
+    expect(bare).toContain('copy it into the session working directory')
     const withRoots = capabilityNotice(8_000_000, ['/Users/x/Downloads', '/tmp'])
     expect(withRoots).toContain('/Users/x/Downloads')
     expect(withRoots).toContain('/tmp')

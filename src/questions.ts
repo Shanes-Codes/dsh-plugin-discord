@@ -103,12 +103,12 @@ const truncate = (text: string, max: number): string =>
 export function formatQuestionContent(item: QuestionItem, index: number, total: number): string {
   const parts: string[] = []
   const counter = total > 1 ? `(${String(index + 1)}/${String(total)}) ` : ''
-  parts.push(`❓ ${counter}**${truncate(item.header ?? '请确认', 80)}**`)
+  parts.push(`❓ ${counter}**${truncate(item.header ?? 'Please confirm', 80)}**`)
   parts.push(truncate(item.question, 900))
   if (item.detail !== undefined && item.detail.trim() !== '') {
     parts.push(truncate(item.detail, 700).split('\n').map(line => `> ${line}`).join('\n'))
   }
-  if ((item.options ?? []).length === 0) parts.push('_点击下面的按钮输入回答。_')
+  if ((item.options ?? []).length === 0) parts.push('_Click the button below to answer._')
   return truncate(parts.join('\n'), 1900)
 }
 
@@ -127,7 +127,7 @@ export function buildComponents(rpcId: string, index: number, item: QuestionItem
       components: [{
         type: DISCORD.STRING_SELECT,
         custom_id: `q:${rpcId}:${String(index)}`,
-        placeholder: truncate(item.multiSelect === true ? '选择一项或多项…' : '选择一项…', 100),
+        placeholder: truncate(item.multiSelect === true ? 'Select one or more…' : 'Select one…', 100),
         min_values: 1,
         max_values: item.multiSelect === true ? options.length : 1,
         options: options.map((option, optionIndex) => ({
@@ -145,13 +145,13 @@ export function buildComponents(rpcId: string, index: number, item: QuestionItem
         type: DISCORD.BUTTON,
         style: DISCORD.BUTTON_SECONDARY,
         custom_id: `qc:${rpcId}:${String(index)}`,
-        label: '✏️ 自定义回答',
+        label: '✏️ Custom answer',
       },
       {
         type: DISCORD.BUTTON,
         style: DISCORD.BUTTON_DANGER,
         custom_id: `qx:${rpcId}:${String(index)}`,
-        label: '取消提问',
+        label: 'Cancel question',
       },
     ],
   })
@@ -268,7 +268,7 @@ export class QuestionRelay {
     }
 
     const elsewhere = next().then(async (answer) => {
-      await this.closeCards(relay, '✅ 已回答(来自 web 界面)。')
+      await this.closeCards(relay, '✅ Answered (from the web UI).')
       return answer
     })
     try {
@@ -312,7 +312,7 @@ export class QuestionRelay {
     if (relay === undefined) {
       await this.options.rest.respondInteraction(interaction.id, interaction.token, {
         type: DISCORD.CALLBACK_UPDATE_MESSAGE,
-        data: { content: '⌛ 这个提问已经结束(可能已在别处回答)。', components: [] },
+        data: { content: '⌛ This question has already been closed (it may have been answered elsewhere).', components: [] },
       }).catch(() => { /* stale */ })
       return true
     }
@@ -323,7 +323,7 @@ export class QuestionRelay {
       this.settle(parsed.rpcId, undefined)
       await this.options.rest.respondInteraction(interaction.id, interaction.token, {
         type: DISCORD.CALLBACK_UPDATE_MESSAGE,
-        data: { content: `~~${formatQuestionContent(item, parsed.index, relay.questions.length).split('\n')[0] ?? ''}~~\n⏹️ 已取消。`, components: [] },
+        data: { content: `~~${formatQuestionContent(item, parsed.index, relay.questions.length).split('\n')[0] ?? ''}~~\n⏹️ Cancelled.`, components: [] },
       })
       return true
     }
@@ -340,7 +340,7 @@ export class QuestionRelay {
               type: DISCORD.TEXT_INPUT,
               custom_id: 'answer',
               style: DISCORD.TEXT_INPUT_PARAGRAPH,
-              label: truncate('你的回答', 45),
+              label: truncate('Your answer', 45),
               required: true,
               max_length: 1500,
             }],
@@ -364,13 +364,13 @@ export class QuestionRelay {
     }
     relay.answers.set(parsed.index, answer)
 
-    const chosen = answer.custom !== undefined ? `✏️ ${answer.custom}` : answer.selected.join('、')
+    const chosen = answer.custom !== undefined ? `✏️ ${answer.custom}` : answer.selected.join(', ')
     const remaining = relay.questions.length - relay.answers.size
-    const status = remaining > 0 ? `\n(还有 ${String(remaining)} 个问题待回答)` : ''
+    const status = remaining > 0 ? `\n(${String(remaining)} question${remaining === 1 ? '' : 's'} left to answer)` : ''
     await this.options.rest.respondInteraction(interaction.id, interaction.token, {
       type: DISCORD.CALLBACK_UPDATE_MESSAGE,
       data: {
-        content: `${formatQuestionContent(item, parsed.index, relay.questions.length)}\n\n✅ 已选择: **${truncate(chosen, 300)}**${status}`,
+        content: `${formatQuestionContent(item, parsed.index, relay.questions.length)}\n\n✅ Selected: **${truncate(chosen, 300)}**${status}`,
         components: [],
       },
     }).catch((error: unknown) => {

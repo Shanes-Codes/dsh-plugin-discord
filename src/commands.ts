@@ -100,28 +100,28 @@ export function commandFromInteraction(name: string, options: readonly Interacti
 export const APPLICATION_COMMANDS = [
   {
     name: 'new',
-    description: '新开一个 dsh 会话(与 web 界面共享)',
-    options: [{ type: 3, name: 'title', description: '会话标题(可选)', required: false }],
+    description: 'Start a new dsh session (shared with the web UI)',
+    options: [{ type: 3, name: 'title', description: 'Session title (optional)', required: false }],
   },
-  { name: 'sessions', description: '列出最近的 Discord 会话' },
+  { name: 'sessions', description: 'list recent Discord sessions' },
   {
     name: 'use',
-    description: '把本频道绑定到指定会话(web 上的会话 id 也可以)',
-    options: [{ type: 3, name: 'session', description: '会话 id', required: true }],
+    description: 'Bind this channel to a session (a session id from the web UI works too)',
+    options: [{ type: 3, name: 'session', description: 'session id', required: true }],
   },
-  { name: 'current', description: '显示当前绑定的会话' },
-  { name: 'stop', description: '取消当前会话正在跑的回合' },
-  { name: 'help', description: '桥接使用帮助' },
+  { name: 'current', description: 'show the session this thread is bound to' },
+  { name: 'stop', description: 'cancel the turn running in the current session' },
+  { name: 'help', description: 'bridge usage help' },
 ] as const
 
 /** The `/help` reply, kept next to the parser it documents. */
 export const HELP_TEXT = [
-  '**dsh Discord 桥接**',
-  '直接发消息 → 发给当前 dsh 会话(没有就自动新建)',
-  '`/new [标题]` — 新开一个会话(和 web 界面共享)',
-  '`/sessions` — 列出最近的 Discord 会话',
-  '`/use <会话id>` — 切换到某个会话(也可以是 web 上建的)',
-  '`/current` — 显示当前绑定的会话',
-  '`/stop` — 取消当前会话正在跑的回合',
-  '`/help` — 本帮助',
+  '**dsh Discord bridge**',
+  'Send a message → it goes to the current dsh session (one is created if there is none)',
+  '`/new [title]` — start a new session (shared with the web UI)',
+  '`/sessions` — list recent Discord sessions',
+  '`/use <session id>` — switch to a session (one created on the web works too)',
+  '`/current` — show the session this thread is bound to',
+  '`/stop` — cancel the turn running in the current session',
+  '`/help` — this help',
 ].join('\n')

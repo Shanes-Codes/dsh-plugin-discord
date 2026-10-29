@@ -16,7 +16,7 @@ appear in the `/` picker). Plain-text forms keep working as a fallback — typin
 | Command | Effect |
 |---|---|
 | *(any text)* | Prompt the channel's current session (auto-creates one) |
-| `/new [标题]` | New session, date-stamped `[Discord]` title |
+| `/new [title]` | New session, date-stamped `[Discord]` title |
 | `/sessions` (`/list`) | Recent Discord-bridged sessions |
 | `/use <id>` (`/switch`, `/resume`) | Bind this channel to a session — web-created ids work too |
 | `/current` (`/session`) | Show the bound session and its status |
@@ -85,7 +85,7 @@ Disable the whole surface with `notifyEnabled: false`.
 curl -s -X POST http://127.0.0.1:3080/plugins/discord/api/notify \
   -H "authorization: Bearer $(cat ~/.dsh/profiles/web/discord-notify.secret)" \
   -H 'content-type: application/json' \
-  -d '{"content": "⚠️ 磁盘使用率 92%"}'
+  -d '{"content": "⚠️ Disk usage is at 92%"}'
 ```
 
 The endpoint is loopback by default (dsh binds 127.0.0.1): callers on the same
@@ -130,26 +130,26 @@ claude mcp add --transport http discord \
 
 Give an agent this to make it **register the MCP itself** (fill in your paths):
 
-> 帮我接入本机 dsh 的 Discord 通知能力:MCP 端点是
-> `http://127.0.0.1:3080/plugins/discord/mcp`(transport: streamable-http),
-> 鉴权头 `Authorization: Bearer <密钥>`,密钥内容读文件
-> `~/.dsh/profiles/web/discord-notify.secret`。请把它注册进你的 MCP 配置,
-> 然后调用 `discord_notify` 工具发一条测试消息「MCP 接入成功」验证。
+> Please wire up this host's dsh Discord notifications for me: the MCP endpoint is
+> `http://127.0.0.1:3080/plugins/discord/mcp` (transport: streamable-http),
+> with the header `Authorization: Bearer <secret>`, whose value is the contents of
+> `~/.dsh/profiles/web/discord-notify.secret`. Register it in your MCP config,
+> then call the `discord_notify` tool to send a test message "MCP hookup works" to verify.
 
 Give an agent this to make it **use the HTTP API in code/scripts** (no MCP needed):
 
-> 本机有一个 Discord 推送接口,写监控/定时脚本需要通知我时调用它:
+> This host exposes a Discord push endpoint; call it from monitoring or cron scripts when you need to notify me:
 > `POST http://127.0.0.1:3080/plugins/discord/api/notify`,
-> 请求头 `Authorization: Bearer $(cat ~/.dsh/profiles/web/discord-notify.secret)`
-> 和 `Content-Type: application/json`,请求体 `{"content": "通知文本"}`。
-> 返回 `{"ok": true}` 即送达;非 200 时把状态码和响应体记入日志,不要重试超过 3 次。
+> with headers `Authorization: Bearer $(cat ~/.dsh/profiles/web/discord-notify.secret)`
+> and `Content-Type: application/json`, and a body of `{"content": "your message"}`.
+> A `{"ok": true}` response means it was delivered; on a non-200 response log the status code and body, and do not retry more than 3 times.
 
-Or drop this one-liner into an agent's standing instructions (CLAUDE.md 等),
+Or drop this one-liner into an agent's standing instructions (CLAUDE.md etc.),
 so it always knows the channel exists:
 
-> 需要主动通知用户时(任务完成、告警、提醒),POST
-> `http://127.0.0.1:3080/plugins/discord/api/notify`,Bearer 密钥在
-> `~/.dsh/profiles/web/discord-notify.secret`,body `{"content": "..."}`。
+> When you need to notify the user on your own (task finished, alerts, reminders), POST
+> `http://127.0.0.1:3080/plugins/discord/api/notify`; the Bearer secret is in
+> `~/.dsh/profiles/web/discord-notify.secret`, body `{"content": "..."}`.
 
 ## Inline questions (ask_user_question → Discord components)
 
