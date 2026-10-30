@@ -22,7 +22,7 @@ import type { HostModules } from './host-modules.ts'
 import type { BridgeCommand } from './commands.ts'
 import { HELP_TEXT } from './commands.ts'
 import { chunkReply } from './chunk.ts'
-import { extractReply, findPromptSeq } from './reply.ts'
+import { extractReply, findPromptSeq, shouldSkipBridgedReply } from './reply.ts'
 import { capabilityNotice, extractFileMarkers, isPathUnder, sanitizeFilename } from './attachments.ts'
 import type { GatewayAttachment } from './gateway.ts'
 import type { BindingStore } from './state.ts'
@@ -103,6 +103,21 @@ export interface BridgeReply {
   files: { filename: string; data: Uint8Array }[]
 }
 
+/**
+ * One prompt handed to the agent, plus everything its waiter needs to fold
+ * the turn it landed in. Produced by {@link SessionBridge.deliverPrompt}
+ * (chained per channel) and consumed by {@link SessionBridge.answerPrompt}
+ * (concurrent waiters, one per bridged message).
+ */
+interface Delivery {
+  channelId: string
+  messageId: string
+  agent: Agent
+  agentCwd: string
+  /** Set when this message auto-created the session; the answerer prepends it. */
+  preamble: string[]
+}
+
 /** Session-header facts the bridge reads from persistence listings. */
 interface HeaderLike {
   id: string
@@ -118,7 +133,7 @@ export class SessionBridge {
   private readonly store: BindingStore
   private readonly config: BridgeConfig
   private readonly log: (level: 'info' | 'warn', text: string) => void
-  /** Per-channel promise chain: one channel's prompts run strictly in order. */
+  /** Per-channel promise chain: one channel's prompt DELIVERIES run strictly in order. */
   private readonly channelChains = new Map<string, Promise<void>>()
   /** Deduplicates concurrent create/resume of one session id. */
   private readonly acquisitions = new Map<string, Promise<Agent>>()
@@ -431,6 +446,14 @@ export class SessionBridge {
     return { agent: created.agent, created: true, title: created.title }
   }
 
+  /**
+   * Deliver one prompt, then wait for its turn to answer.
+   *
+   * Only DELIVERY serializes per channel (session creation races, attachment
+   * saves, message order); the answer runs detached so a follow-up thought
+   * arriving seconds later is delivered as steering into the running turn —
+   * the web UI's Ctrl+Enter — instead of queueing behind the whole turn.
+   */
   private async enqueuePrompt(
     channelId: string,
     messageId: string,
@@ -439,9 +462,17 @@ export class SessionBridge {
     attachments: readonly GatewayAttachment[],
   ): Promise<BridgeReply> {
     const previous = this.channelChains.get(channelId) ?? Promise.resolve()
-    const run = previous.then(async () => await this.runPrompt(channelId, messageId, text, beginTyping, attachments))
-    this.channelChains.set(channelId, run.then(() => undefined, () => undefined))
-    return await run
+    const delivered = previous.then(async () => await this.deliverPrompt(channelId, messageId, text, attachments))
+    this.channelChains.set(channelId, delivered.then(() => undefined, () => undefined))
+    const stopTyping = beginTyping()
+    try {
+      return await this.answerPrompt(await delivered)
+    } catch (error) {
+      this.log('warn', `prompt failed: ${String(error)}`)
+      return { chunks: [`⚠️ Something went wrong: ${error instanceof Error ? error.message : String(error)}`], files: [] }
+    } finally {
+      stopTyping()
+    }
   }
 
   /** Tell a freshly acquired agent about the bridge's transport abilities, once. */
@@ -522,65 +553,88 @@ export class SessionBridge {
     return { files, problems }
   }
 
-  private async runPrompt(
+  /**
+   * Hand one prompt to the agent as steering and return as soon as it is in
+   * the inbox. The per-channel chain releases the next message the moment
+   * this returns, so a follow-up thought arriving seconds later is delivered
+   * into the running turn instead of waiting behind the whole turn.
+   */
+  private async deliverPrompt(
     channelId: string,
     messageId: string,
     text: string,
-    beginTyping: () => () => void,
     attachments: readonly GatewayAttachment[],
-  ): Promise<BridgeReply> {
-    const stopTyping = beginTyping()
-    try {
-      const { agent, created, title } = await this.ensureChannelAgent(channelId)
-      const preamble = created && title !== undefined
-        ? [`(auto-created session **${title}** · \`${agent.id}\`)`]
-        : []
-      this.injectNoticeOnce(agent)
-      const agentCwd = agent.session.header.cwd ?? this.config.cwd
-      let promptText = text
-      if (attachments.length > 0) {
-        const notes = await this.saveIncoming(agentCwd, messageId, attachments)
-        if (notes.length > 0) promptText = `${promptText}\n\n${notes.join('\n')}`.trim()
-      }
-      agent.followup(this.userMessage(
-        [{ type: 'text', text: promptText }],
-        { kind: 'user', discordMessageId: messageId, discordChannelId: channelId },
-      ))
-      await agent.whenIdle()
-      const flushable = this.ctx.get('sessions')
-      if (flushable !== undefined) await flushable.flush(agent.session)
-
-      // dsh >= 0.1.5 materializes the log through `snapshotEvents()`; earlier
-      // hosts exposed the same frozen array as a plain `events` property.
-      const log = agent.session as unknown as {
-        snapshotEvents?: () => readonly { seq: number; type: string; data?: unknown }[]
-        events?: readonly { seq: number; type: string; data?: unknown }[]
-      }
-      const events = log.snapshotEvents?.() ?? log.events
-      if (events === undefined) throw new Error('this host exposes no session event log (neither snapshotEvents() nor events)')
-      const promptSeq = findPromptSeq(events, messageId)
-      if (promptSeq === undefined) {
-        return { chunks: [...preamble, '⚠️ The message never reached the session (it may have been cancelled). Please try again.'], files: [] }
-      }
-      const reply = extractReply(events, promptSeq)
-      if (reply.reasonKind === 'completed' || (reply.reasonKind === undefined && reply.text !== '')) {
-        const { text: cleaned, paths } = extractFileMarkers(reply.text)
-        const uploads = await this.collectUploads(agentCwd, paths)
-        const chunks = chunkReply(cleaned, this.config.maxChunksPerReply)
-        const body = chunks.length === 0 && uploads.files.length === 0
-          ? [...preamble, '(no text reply this turn)']
-          : [...preamble, ...chunks, ...uploads.problems]
-        return { chunks: body, files: uploads.files }
-      }
-      if (reply.reasonKind === 'cancelled') return { chunks: [...preamble, '⏹️ Turn cancelled.'], files: [] }
-      const detail = reply.errorMessage ?? reply.reasonKind ?? 'unknown'
-      return { chunks: [...preamble, `⚠️ Turn failed: ${detail}`], files: [] }
-    } catch (error) {
-      this.log('warn', `prompt failed: ${String(error)}`)
-      return { chunks: [`⚠️ Something went wrong: ${error instanceof Error ? error.message : String(error)}`], files: [] }
-    } finally {
-      stopTyping()
+  ): Promise<Delivery> {
+    const { agent, created, title } = await this.ensureChannelAgent(channelId)
+    const preamble = created && title !== undefined
+      ? [`(auto-created session **${title}** · \`${agent.id}\`)`]
+      : []
+    this.injectNoticeOnce(agent)
+    const agentCwd = agent.session.header.cwd ?? this.config.cwd
+    let promptText = text
+    if (attachments.length > 0) {
+      const notes = await this.saveIncoming(agentCwd, messageId, attachments)
+      if (notes.length > 0) promptText = `${promptText}\n\n${notes.join('\n')}`.trim()
     }
+    this.steer(agent, this.userMessage(
+      [{ type: 'text', text: promptText }],
+      { kind: 'user', discordMessageId: messageId, discordChannelId: channelId },
+    ))
+    return { channelId, messageId, agent, agentCwd, preamble }
+  }
+
+  /**
+   * Deliver like the web UI's Ctrl+Enter: steering joins a running turn at
+   * its next step boundary; an idle agent starts a turn with it. Hosts
+   * without the steering surface fall back to a queued follow-up turn.
+   */
+  private steer(agent: Agent, message: UserMessage): void {
+    const steer = (agent as unknown as { steer?: (message: UserMessage) => void }).steer
+    if (typeof steer === 'function') steer.call(agent, message)
+    else agent.followup(message)
+  }
+
+  /**
+   * Wait for the turn this delivery landed in and fold its answer — unless
+   * an earlier Discord message in the same turn already owns that fold.
+   * Discord has no turn mirror, so the bridge answers even when the web UI
+   * had the last word; see {@link shouldSkipBridgedReply}.
+   */
+  private async answerPrompt(delivery: Delivery): Promise<BridgeReply> {
+    const { agent, agentCwd, preamble, messageId } = delivery
+    await agent.whenIdle()
+    const flushable = this.ctx.get('sessions')
+    if (flushable !== undefined) await flushable.flush(agent.session)
+
+    // dsh >= 0.1.5 materializes the log through `snapshotEvents()`; earlier
+    // hosts exposed the same frozen array as a plain `events` property.
+    const log = agent.session as unknown as {
+      snapshotEvents?: () => readonly { seq: number; type: string; data?: unknown }[]
+      events?: readonly { seq: number; type: string; data?: unknown }[]
+    }
+    const events = log.snapshotEvents?.() ?? log.events
+    if (events === undefined) throw new Error('this host exposes no session event log (neither snapshotEvents() nor events)')
+    const promptSeq = findPromptSeq(events, messageId)
+    if (promptSeq === undefined) {
+      return { chunks: [...preamble, '⚠️ The message never reached the session (it may have been cancelled). Please try again.'], files: [] }
+    }
+    if (shouldSkipBridgedReply(events, promptSeq, { mirrorAnswersForeignTurns: false })) {
+      // Silent: an earlier Discord message in this turn folds the same answer.
+      return { chunks: [], files: [] }
+    }
+    const reply = extractReply(events, promptSeq)
+    if (reply.reasonKind === 'completed' || (reply.reasonKind === undefined && reply.text !== '')) {
+      const { text: cleaned, paths } = extractFileMarkers(reply.text)
+      const uploads = await this.collectUploads(agentCwd, paths)
+      const chunks = chunkReply(cleaned, this.config.maxChunksPerReply)
+      const body = chunks.length === 0 && uploads.files.length === 0
+        ? [...preamble, '(no text reply this turn)']
+        : [...preamble, ...chunks, ...uploads.problems]
+      return { chunks: body, files: uploads.files }
+    }
+    if (reply.reasonKind === 'cancelled') return { chunks: [...preamble, '⏹️ Turn cancelled.'], files: [] }
+    const detail = reply.errorMessage ?? reply.reasonKind ?? 'unknown'
+    return { chunks: [...preamble, `⚠️ Turn failed: ${detail}`], files: [] }
   }
 
   private async commandNew(channelId: string, label: string): Promise<string[]> {

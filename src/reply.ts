@@ -39,6 +39,60 @@ export function findPromptSeq(events: readonly LogEventLike[], discordMessageId:
 }
 
 /**
+ * Decide whether THIS prompt's waiter stays silent about the turn it landed in.
+ *
+ * A bridged message is delivered as steering (the web UI's Ctrl+Enter): it
+ * joins the running turn instead of opening its own, so several bridged
+ * messages — and any web-UI input — can share one turn, and every waiter
+ * wakes at the same `turn/end`. Exactly one of them must answer:
+ * - An earlier bridged message in the same turn owns the answer: its fold
+ *   starts before this steering and already covers everything after it.
+ * - When the turn's LAST user message came from another surface (web UI
+ *   steering, or an injected context) and a turn mirror runs alongside the
+ *   bridge, the mirror answers that turn — the bridge must not double-send.
+ *   Discord has no turn mirror yet, so its bridge passes
+ *   `mirrorAnswersForeignTurns: false` and answers regardless of who spoke
+ *   last; dropping the reply there would answer nobody.
+ * @param events - the session's full in-memory event log.
+ * @param promptSeq - seq of this bridged user/message event (from findPromptSeq).
+ * @param options.mirrorAnswersForeignTurns - whether a turn mirror mirrors
+ * turns whose last user message is not bridge-originated.
+ * @returns true when this waiter must send nothing.
+ */
+export function shouldSkipBridgedReply(
+  events: readonly LogEventLike[],
+  promptSeq: number,
+  options: { mirrorAnswersForeignTurns: boolean },
+): boolean {
+  let earlierBridge = false
+  let lastUserMid: string | undefined
+  for (const event of events) {
+    if (event.type === 'turn/end') {
+      // A turn/end before promptSeq closes an earlier turn: bridge messages
+      // in it are not steering of THIS turn, so the same-turn scan restarts.
+      // The first turn/end after promptSeq closes this turn — the scan is done.
+      if (event.seq < promptSeq) earlierBridge = false
+      else break
+      continue
+    }
+    if (event.type !== 'user/message') continue
+    // The event's data IS the message: { content, source, role, id }.
+    const mid = (event.data as { source?: { discordMessageId?: string } }).source?.discordMessageId
+    if (event.seq < promptSeq) {
+      if (mid !== undefined) earlierBridge = true
+      continue
+    }
+    // seq >= promptSeq: still inside this turn (the loop breaks at its end).
+    // The event AT promptSeq is this bridge's own message, so it carries a
+    // mid; only a later foreign user/message (web steering, injected
+    // context) can leave lastUserMid undefined.
+    lastUserMid = mid
+  }
+  if (earlierBridge) return true
+  return options.mirrorAnswersForeignTurns && lastUserMid === undefined
+}
+
+/**
  * Fold the events between the bridged prompt and its turn's end into a reply.
  *
  * The prompt's own `turn/start` precedes the `user/message` event in the log

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractReply, findPromptSeq } from '../src/reply.ts'
+import { extractReply, findPromptSeq, shouldSkipBridgedReply } from '../src/reply.ts'
 import type { LogEventLike } from '../src/reply.ts'
 
 // Shapes mirror a real session log: the user/message event's data IS the
@@ -34,6 +34,42 @@ describe('findPromptSeq', () => {
 
   it('returns undefined when the id is absent', () => {
     expect(findPromptSeq([userMessage(1)], 'nope')).toBeUndefined()
+  })
+})
+
+function turnEnd(seq: number): LogEventLike {
+  return { seq, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }
+}
+
+describe('shouldSkipBridgedReply', () => {
+  const noMirror = { mirrorAnswersForeignTurns: false }
+  const mirror = { mirrorAnswersForeignTurns: true }
+
+  it('answers when its message is the only input to the turn', () => {
+    const events = [userMessage(2, 'm1'), assistant(3, 'answer'), turnEnd(4)]
+    expect(shouldSkipBridgedReply(events, 2, noMirror)).toBe(false)
+  })
+
+  it('the earliest discord message answers and later steering stays silent', () => {
+    // Two Discord messages steering into one turn: the first waiter's fold
+    // already covers everything after it, so the second must not double-send.
+    const events = [userMessage(2, 'm1'), userMessage(3, 'm2'), assistant(4, 'answer'), turnEnd(5)]
+    expect(shouldSkipBridgedReply(events, 2, noMirror)).toBe(false)
+    expect(shouldSkipBridgedReply(events, 3, noMirror)).toBe(true)
+  })
+
+  it('a bridge message in an earlier turn does not silence this turn', () => {
+    const events = [userMessage(2, 'm1'), turnEnd(4), userMessage(5, 'm2'), assistant(6, 'answer'), turnEnd(7)]
+    expect(shouldSkipBridgedReply(events, 5, noMirror)).toBe(false)
+  })
+
+  it('answers even when the web UI had the last word (no turn mirror here)', () => {
+    // Discord has no turn mirror: silence would answer nobody, so the bridge
+    // waiter folds the turn regardless of who spoke last.
+    const events = [userMessage(2, 'm1'), userMessage(3), assistant(4, 'answer'), turnEnd(5)]
+    expect(shouldSkipBridgedReply(events, 2, noMirror)).toBe(false)
+    // With a mirror ported in, the mirror would own that turn instead.
+    expect(shouldSkipBridgedReply(events, 2, mirror)).toBe(true)
   })
 })
 
